@@ -5,14 +5,14 @@
         <Nullable>enable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
-      <UserSecretsId>12bb6c80-32b6-40e2-8bd6-bad8c618239d</UserSecretsId>
-  </PropertyGroup>
+        <UserSecretsId>055efc13-b424-420a-8e5a-089adc0025f2</UserSecretsId>
+    </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="Dapper" Version="2.1.35" />
-        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.10" />
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.10"/>
         <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.0-preview3.24332.3" />
-        <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -36,5 +36,4 @@
       <_ContentIncludedByDefault Remove="NorionBankProgrammingTest.Tests\obj\project.assets.json" />
       <_ContentIncludedByDefault Remove="NorionBankProgrammingTest.Tests\obj\project.packagespec.json" />
     </ItemGroup>
-
 </Project>

@@ -1,6 +1,8 @@
-﻿namespace NorionBankProgrammingTest.Interfaces;
+using NorionBankProgrammingTest.Models;
+
+namespace NorionBankProgrammingTest.Interfaces;
 
 public interface ITollFeeService
 {
-    int GetTollFee(string vehicleType, DateTime[] dates);
+    Task<int> CalculateTollFee(PassagesModel passages);
 }

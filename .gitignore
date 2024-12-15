@@ -3,3 +3,7 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+/.idea/.idea.NorionBankProgrammingTest/.idea/sqldialects.xml
+/docker-compose.yml
+/.idea/.idea.NorionBankProgrammingTest/.idea/dataSources.xml
+/.idea/config/applicationhost.config

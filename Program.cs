@@ -1,3 +1,4 @@
+using NorionBankProgrammingTest.DTOs;
 using NorionBankProgrammingTest.Interfaces;
 using NorionBankProgrammingTest.Models;
 using NorionBankProgrammingTest.Repositories;
@@ -24,11 +25,15 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.MapPost("/GetTollFee", (ITollFeeService tollFeeService, string vehicleType, List<DateTime> passages) =>
+app.MapPost("/GetTollFee", async (ITollFeeService tollFeeService, PassagesModel passages) =>
 {
-    app.Logger.LogInformation($"Calculating toll fee for {vehicleType}");
-    var tollFee = tollFeeService.GetTollFee(vehicleType, passages.ToArray());
-    return new { response = tollFee };
+    app.Logger.LogDebug($"Calculating toll fee for {passages.VehicleType}");
+    var amount = await tollFeeService.CalculateTollFee(passages);
+    app.Logger.LogDebug($"Calculated toll fee {amount} for {passages.VehicleType}");
+    return new TollFeeDTO
+    {
+        Fee = amount
+    };
 })
 .WithName("GetTollFee")
 .WithOpenApi();
