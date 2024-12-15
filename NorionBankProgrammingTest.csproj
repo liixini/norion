@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.10"/>
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2"/>
+    </ItemGroup>
+
+    <ItemGroup>
+      <Compile Remove="NorionBankProgrammingTest.Tests\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <EmbeddedResource Remove="NorionBankProgrammingTest.Tests\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Content Remove="NorionBankProgrammingTest.Tests\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Remove="NorionBankProgrammingTest.Tests\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <_ContentIncludedByDefault Remove="NorionBankProgrammingTest.Tests\obj\NorionBankProgrammingTest.Tests.csproj.nuget.dgspec.json" />
+      <_ContentIncludedByDefault Remove="NorionBankProgrammingTest.Tests\obj\project.assets.json" />
+      <_ContentIncludedByDefault Remove="NorionBankProgrammingTest.Tests\obj\project.packagespec.json" />
+    </ItemGroup>
+
+</Project>
