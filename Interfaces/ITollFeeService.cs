@@ -1,8 +1,6 @@
-﻿using NorionBankProgrammingTest.Reference;
-
-namespace NorionBankProgrammingTest.Interfaces;
+﻿namespace NorionBankProgrammingTest.Interfaces;
 
 public interface ITollFeeService
 {
-    int GetTollFee(IVehicle vehicle, DateTime[] dates);
+    int GetTollFee(string vehicleType, DateTime[] dates);
 }

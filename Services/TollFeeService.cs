@@ -4,14 +4,21 @@ namespace NorionBankProgrammingTest.Services;
 
 public class TollFeeService : ITollFeeService
 {
-    public int GetTollFee(IVehicle vehicle, DateTime[] dates)
+    private readonly ITollFeeRepository _tollFeeRepository;
+
+    public TollFeeService(ITollFeeRepository tollFeeRepository)
+    {
+        _tollFeeRepository = tollFeeRepository;
+    }
+    
+    public int GetTollFee(string vehicleType, DateTime[] dates)
     {
         var intervalStart = dates[0];
         int totalFee = 0;
         foreach (DateTime date in dates)
         {
-            int nextFee = GetTollFee(date, vehicle);
-            int tempFee = GetTollFee(intervalStart, vehicle);
+            int nextFee = GetTollFee(date, vehicleType);
+            int tempFee = GetTollFee(intervalStart, vehicleType);
 
             long diffInMillies = date.Millisecond - intervalStart.Millisecond;
             long minutes = diffInMillies/1000/60;
@@ -31,9 +38,9 @@ public class TollFeeService : ITollFeeService
         return totalFee;
     }
     
-    public int GetTollFee(DateTime date, IVehicle vehicle)
+    public int GetTollFee(DateTime date, string vehicleType)
     {
-        if (IsTollFreeDate(date) || IsTollFreeVehicle(vehicle))
+        if (IsTollFreeDate(date) || IsTollFreeVehicle(vehicleType))
         {
             return 0;
         }
@@ -53,16 +60,10 @@ public class TollFeeService : ITollFeeService
         else return 0;
     }
     
-     private bool IsTollFreeVehicle(IVehicle vehicle)
+     private bool IsTollFreeVehicle(string vehicleType)
     {
-        if (vehicle == null) return false;
-        String vehicleType = vehicle.GetVehicleType();
-        return vehicleType.Equals(TollFreeVehicles.Motorbike.ToString()) ||
-               vehicleType.Equals(TollFreeVehicles.Tractor.ToString()) ||
-               vehicleType.Equals(TollFreeVehicles.Emergency.ToString()) ||
-               vehicleType.Equals(TollFreeVehicles.Diplomat.ToString()) ||
-               vehicleType.Equals(TollFreeVehicles.Foreign.ToString()) ||
-               vehicleType.Equals(TollFreeVehicles.Military.ToString());
+        var tollFreeVehicles = _tollFeeRepository.GetTollFreeVehicleTypes();
+        return tollFreeVehicles.Result.ContainsKey(vehicleType) && tollFreeVehicles.Result[vehicleType].Active;
     }
 
     private bool IsTollFreeDate(DateTime date)
@@ -88,15 +89,5 @@ public class TollFeeService : ITollFeeService
             }
         }
         return false;
-    }
-
-    private enum TollFreeVehicles
-    {
-        Motorbike = 0,
-        Tractor = 1,
-        Emergency = 2,
-        Diplomat = 3,
-        Foreign = 4,
-        Military = 5
     }
 }
