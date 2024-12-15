@@ -1,8 +1,8 @@
-﻿using NorionBankProgrammingTest.Reference;
+using NorionBankProgrammingTest.Models;
 
 namespace NorionBankProgrammingTest.Interfaces;
 
 public interface ITollFeeService
 {
-    int GetTollFee(IVehicle vehicle, DateTime[] dates);
+    Task<int> CalculateTollFee(PassagesModel passages);
 }

@@ -1,102 +1,186 @@
 ﻿using NorionBankProgrammingTest.Interfaces;
+using NorionBankProgrammingTest.Models;
 
 namespace NorionBankProgrammingTest.Services;
 
 public class TollFeeService : ITollFeeService
 {
-    public int GetTollFee(IVehicle vehicle, DateTime[] dates)
+    private readonly ITollFeeRepository _tollFeeRepository;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<TollFeeService> _logger;
+
+    public TollFeeService(ITollFeeRepository tollFeeRepository, IConfiguration configuration, ILogger<TollFeeService> logger)
     {
-        var intervalStart = dates[0];
-        int totalFee = 0;
-        foreach (DateTime date in dates)
-        {
-            int nextFee = GetTollFee(date, vehicle);
-            int tempFee = GetTollFee(intervalStart, vehicle);
-
-            long diffInMillies = date.Millisecond - intervalStart.Millisecond;
-            long minutes = diffInMillies/1000/60;
-
-            if (minutes <= 60)
-            {
-                if (totalFee > 0) totalFee -= tempFee;
-                if (nextFee >= tempFee) tempFee = nextFee;
-                totalFee += tempFee;
-            }
-            else
-            {
-                totalFee += nextFee;
-            }
-        }
-        if (totalFee > 60) totalFee = 60;
-        return totalFee;
+        _tollFeeRepository = tollFeeRepository;
+        _configuration = configuration;
+        _logger = logger;
     }
     
-    public int GetTollFee(DateTime date, IVehicle vehicle)
+    public async Task<int> CalculateTollFee(PassagesModel passages)
     {
-        if (IsTollFreeDate(date) || IsTollFreeVehicle(vehicle))
+        if (await IsTollFreeVehicle(passages.VehicleType))
         {
             return 0;
         }
+        
+        passages.Passages.Sort();
 
-        int hour = date.Hour;
-        int minute = date.Minute;
+        //Get data used for calculations
+        var removeFreeDatesTask = RemoveFreeDates(passages.Passages);
+        var tollFeesTask = GetTollFees();
+        await Task.WhenAll(removeFreeDatesTask, tollFeesTask);
+        passages.Passages = removeFreeDatesTask.Result;
+        var tollFees = tollFeesTask.Result;
+        var passagesWithoutFreePassages = RemoveFreePassages(passages, tollFees);
+        
+        var totalFee = 0;
+        var dailyFee = 0;
 
-        if (hour == 6 && minute >= 0 && minute <= 29) return 8;
-        else if (hour == 6 && minute >= 30 && minute <= 59) return 13;
-        else if (hour == 7 && minute >= 0 && minute <= 59) return 18;
-        else if (hour == 8 && minute >= 0 && minute <= 29) return 13;
-        else if (hour >= 8 && hour <= 14 && minute >= 30 && minute <= 59) return 8;
-        else if (hour == 15 && minute >= 0 && minute <= 29) return 13;
-        else if (hour == 15 && minute >= 0 || hour == 16 && minute <= 59) return 18;
-        else if (hour == 17 && minute >= 0 && minute <= 59) return 13;
-        else if (hour == 18 && minute >= 0 && minute <= 29) return 8;
-        else return 0;
+        //Not sure if the daily fee should be read from DB or not
+        //So decided to actually use the config file for something
+        var maxDailyFee = Convert.ToInt32(_configuration["MaxDailyFee"]);
+
+        var passagesByDay = passagesWithoutFreePassages
+            .GroupBy(date => new { date.PassageTime.Year, date.PassageTime.DayOfYear })
+            .Select(group => group.ToList())
+            .ToList();
+
+        foreach (var passageList in passagesByDay)
+        {
+            dailyFee = 0;
+            foreach (var passage in passageList)
+            {
+                var tollFee = passage.TollFee;
+                if (tollFee != 0)
+                {
+                    dailyFee += tollFee;
+                    if (dailyFee > maxDailyFee)
+                    {
+                        dailyFee = maxDailyFee;
+                        break;
+                    }
+                }
+            }
+            
+            totalFee += dailyFee;
+        }
+        
+        return totalFee;
     }
     
-     private bool IsTollFreeVehicle(IVehicle vehicle)
+    /// <summary>
+    /// Removes free passages from the passage list
+    /// and applies the business logic that the highest toll within the free passage duration
+    /// should be used for that one passage that isn't free
+    /// </summary>
+    /// <param name="passages">The list of passages</param>
+    /// <param name="tollFees">Toll fees to prevent having to look them up from DB</param>
+    /// <returns></returns>
+    private List<FreePassageModel> RemoveFreePassages(PassagesModel passages, List<TollFeeModel> tollFees)
     {
-        if (vehicle == null) return false;
-        String vehicleType = vehicle.GetVehicleType();
-        return vehicleType.Equals(TollFreeVehicles.Motorbike.ToString()) ||
-               vehicleType.Equals(TollFreeVehicles.Tractor.ToString()) ||
-               vehicleType.Equals(TollFreeVehicles.Emergency.ToString()) ||
-               vehicleType.Equals(TollFreeVehicles.Diplomat.ToString()) ||
-               vehicleType.Equals(TollFreeVehicles.Foreign.ToString()) ||
-               vehicleType.Equals(TollFreeVehicles.Military.ToString());
-    }
+        //Get the duration of the free passage
+        var FreePassingLength = Convert.ToInt32(_configuration["FreePassingDuration"]);
+        var freePassages = new List<FreePassageModel>();
 
-    private bool IsTollFreeDate(DateTime date)
-    {
-        int year = date.Year;
-        int month = date.Month;
-        int day = date.Day;
-
-        if (date.DayOfWeek == DayOfWeek.Saturday || date.DayOfWeek == DayOfWeek.Sunday) return true;
-
-        if (year == 2013)
+        //For loop to be able to modify the index as we jump forward as we remove free passages
+        for (int i = 0; i < passages.Passages.Count; i++)
         {
-            if (month == 1 && day == 1 ||
-                month == 3 && (day == 28 || day == 29) ||
-                month == 4 && (day == 1 || day == 30) ||
-                month == 5 && (day == 1 || day == 8 || day == 9) ||
-                month == 6 && (day == 5 || day == 6 || day == 21) ||
-                month == 7 ||
-                month == 11 && day == 1 ||
-                month == 12 && (day == 24 || day == 25 || day == 26 || day == 31))
+            var maxTollAmount = 0;
+            var freePassageDate = passages.Passages[i].AddMinutes(FreePassingLength);
+            
+            //Gets the passages that are within the free passage duration including the original passage
+            //List is chronologically sorted so we can always assume the next passages relate to the current one
+            var passingsWithinFreePassageDate = passages.Passages
+                .Where(date => date >= passages.Passages[i] && date <= freePassageDate)
+                .ToList();
+
+            //Business rule - use the highest toll fee within the free passage duration
+            foreach (var freePassage in passingsWithinFreePassageDate)
             {
-                return true;
+                var tollFee = GetTollFeePerPassing(freePassage, tollFees);
+                if (tollFee > maxTollAmount)
+                {
+                    maxTollAmount = tollFee;
+                }
             }
+            
+            freePassages.Add(new FreePassageModel
+            {
+                PassageTime = passages.Passages[i],
+                TollFee = maxTollAmount
+            });
+            
+            if (passingsWithinFreePassageDate.Count == 0)
+            {
+                break;
+            }
+            
+            //Skip the next dates as they've already been counted as part of the free passage
+            //Minus one as we include the current iteration's date
+            i += passingsWithinFreePassageDate.Count - 1;
         }
-        return false;
+
+        return freePassages;
     }
 
-    private enum TollFreeVehicles
+    private int GetTollFeePerPassing(DateTime date, List<TollFeeModel> tollFees)
     {
-        Motorbike = 0,
-        Tractor = 1,
-        Emergency = 2,
-        Diplomat = 3,
-        Foreign = 4,
-        Military = 5
+
+        var tollFee = tollFees.FirstOrDefault(x =>
+            IsDateBetweenWithMinutePrecision(
+                GetDateWithHourAndMinutePrecision(date),
+                GetDateWithHourAndMinutePrecision(x.StartDate),
+                GetDateWithHourAndMinutePrecision(x.StopDate)));
+
+        if (tollFee == null)
+        {
+            _logger.LogWarning("No fee found for {date}", date);
+            return 0;
+        }
+
+        return tollFee.Fee;
+    }
+
+    private async Task<List<TollFeeModel>> GetTollFees()
+    {
+        return await _tollFeeRepository.GetTollFees();
+    }
+    
+     private async Task<bool> IsTollFreeVehicle(string vehicleType)
+    {
+        var tollFreeVehicles = await _tollFeeRepository.GetTollFreeVehicleTypes();
+        return tollFreeVehicles.ContainsKey(vehicleType) && tollFreeVehicles[vehicleType].Active;
+    }
+
+    private async Task<List<DateTime>> RemoveFreeDates(List<DateTime> dates)
+    {
+        var tollFreeDates = await _tollFeeRepository.GetTollFreeDates();
+        
+        //Remove all dates that are toll free
+        var tollFreeDatesToRemove = tollFreeDates
+            .SelectMany(tollFreeDate => dates
+            .Where(date => IsDateBetweenWithMinutePrecision(date, tollFreeDate.StartDate, tollFreeDate.StopDate)))
+            .ToList();
+
+        return dates.Where(x => !tollFreeDatesToRemove.Contains(x)).ToList();
+    }
+    
+    private static bool IsDateBetweenWithMinutePrecision(DateTime date, DateTime startDate, DateTime stopDate)
+    {
+        var minutePrecisionDate = GetDateWithMinutePrecision(date);
+        var minutePrecisionStartDate = GetDateWithMinutePrecision(startDate);
+        var minutePrecisionStopDate = GetDateWithMinutePrecision(stopDate);
+
+        return minutePrecisionDate >= minutePrecisionStartDate && minutePrecisionDate <= minutePrecisionStopDate;
+    }
+    
+    private static DateTime GetDateWithMinutePrecision(DateTime date)
+    {
+        return new DateTime(date.Year, date.Month, date.Day, date.Hour, date.Minute, 0);
+    }
+
+    private static DateTime GetDateWithHourAndMinutePrecision(DateTime date)
+    {
+        return new DateTime(1, 1, 1, date.Hour, date.Minute, 0);
     }
 }
