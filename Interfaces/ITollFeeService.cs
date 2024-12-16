@@ -4,5 +4,5 @@ namespace NorionBankProgrammingTest.Interfaces;
 
 public interface ITollFeeService
 {
-    Task<int> CalculateTollFee(PassagesModel passages);
+    Task<int> GetTollFee(PassagesModel passages);
 }

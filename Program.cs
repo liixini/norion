@@ -27,9 +27,9 @@ if (app.Environment.IsDevelopment())
 
 app.MapPost("/GetTollFee", async (ITollFeeService tollFeeService, PassagesModel passages) =>
 {
-    app.Logger.LogDebug($"Calculating toll fee for {passages.VehicleType}");
-    var amount = await tollFeeService.CalculateTollFee(passages);
-    app.Logger.LogDebug($"Calculated toll fee {amount} for {passages.VehicleType}");
+    app.Logger.LogDebug("Calculating toll fee for {passages.VehicleType} with passages {passages.Passages}", passages.VehicleType, passages.Passages);
+    var amount = await tollFeeService.GetTollFee(passages);
+    app.Logger.LogInformation("Calculated toll fee {amount} for {passages.VehicleType} with passages {passages.Passages}", amount, passages, passages.Passages);
     return new TollFeeDTO
     {
         Fee = amount

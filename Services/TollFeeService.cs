@@ -8,46 +8,58 @@ public class TollFeeService : ITollFeeService
     private readonly ITollFeeRepository _tollFeeRepository;
     private readonly IConfiguration _configuration;
     private readonly ILogger<TollFeeService> _logger;
+    private readonly int _freePassingLengthInMinutes;
+    private readonly int _maxDailyFee;
 
     public TollFeeService(ITollFeeRepository tollFeeRepository, IConfiguration configuration, ILogger<TollFeeService> logger)
     {
         _tollFeeRepository = tollFeeRepository;
         _configuration = configuration;
         _logger = logger;
+        _freePassingLengthInMinutes = Convert.ToInt32(_configuration["FreePassingDuration"]);
+        _maxDailyFee = Convert.ToInt32(_configuration["MaxDailyFee"]);
     }
     
-    public async Task<int> CalculateTollFee(PassagesModel passages)
+    public async Task<int> GetTollFee(PassagesModel passages)
     {
-        if (await IsTollFreeVehicle(passages.VehicleType))
+        //We could collect all data at once for faster processing, but we save 2 data calls if the vehicle is toll free
+        var tollFreeVehicleTypes = await _tollFeeRepository.GetTollFreeVehicleTypes();
+        
+        if(IsTollFreeVehicle(passages.VehicleType, tollFreeVehicleTypes))
         {
+            _logger.LogInformation("Vehicle {passages.VehicleType} is toll free", passages.VehicleType);
             return 0;
         }
         
+        //sort all passages chronologically for easier logic later down the line
         passages.Passages.Sort();
 
         //Get data used for calculations
-        var removeFreeDatesTask = RemoveFreeDates(passages.Passages);
-        var tollFeesTask = GetTollFees();
-        await Task.WhenAll(removeFreeDatesTask, tollFeesTask);
-        passages.Passages = removeFreeDatesTask.Result;
+        var getFreeDatesTask = _tollFeeRepository.GetTollFreeDates();
+        var tollFeesTask = _tollFeeRepository.GetTollFees();
+        await Task.WhenAll(getFreeDatesTask, tollFeesTask);
         var tollFees = tollFeesTask.Result;
-        var passagesWithoutFreePassages = RemoveFreePassages(passages, tollFees);
+        var freeDates = getFreeDatesTask.Result;
         
+        //filter out irrelevant passages
+        passages.Passages = RemoveFreeDates(passages.Passages, freeDates);
+        var filteredPassages = RemoveFreePassages(passages, tollFees, _freePassingLengthInMinutes);
+        
+        return CalculateTollFee(filteredPassages, _maxDailyFee);
+    }
+    
+    internal int CalculateTollFee(List<FreePassageModel> filteredPassages, int maxDailyFee)
+    {
         var totalFee = 0;
-        var dailyFee = 0;
 
-        //Not sure if the daily fee should be read from DB or not
-        //So decided to actually use the config file for something
-        var maxDailyFee = Convert.ToInt32(_configuration["MaxDailyFee"]);
-
-        var passagesByDay = passagesWithoutFreePassages
+        var passagesByDay = filteredPassages
             .GroupBy(date => new { date.PassageTime.Year, date.PassageTime.DayOfYear })
             .Select(group => group.ToList())
             .ToList();
 
         foreach (var passageList in passagesByDay)
         {
-            dailyFee = 0;
+            var dailyFee = 0;
             foreach (var passage in passageList)
             {
                 var tollFee = passage.TollFee;
@@ -75,18 +87,17 @@ public class TollFeeService : ITollFeeService
     /// </summary>
     /// <param name="passages">The list of passages</param>
     /// <param name="tollFees">Toll fees to prevent having to look them up from DB</param>
+    /// <param name="freePassingMinutes">The duration in minutes of how long we should consolidate free passings from the first passing</param>
     /// <returns></returns>
-    private List<FreePassageModel> RemoveFreePassages(PassagesModel passages, List<TollFeeModel> tollFees)
+    internal List<FreePassageModel> RemoveFreePassages(PassagesModel passages, List<TollFeeModel> tollFees, int freePassingMinutes)
     {
-        //Get the duration of the free passage
-        var FreePassingLength = Convert.ToInt32(_configuration["FreePassingDuration"]);
         var freePassages = new List<FreePassageModel>();
 
         //For loop to be able to modify the index as we jump forward as we remove free passages
         for (int i = 0; i < passages.Passages.Count; i++)
         {
             var maxTollAmount = 0;
-            var freePassageDate = passages.Passages[i].AddMinutes(FreePassingLength);
+            var freePassageDate = passages.Passages[i].AddMinutes(freePassingMinutes);
             
             //Gets the passages that are within the free passage duration including the original passage
             //List is chronologically sorted so we can always assume the next passages relate to the current one
@@ -123,7 +134,7 @@ public class TollFeeService : ITollFeeService
         return freePassages;
     }
 
-    private int GetTollFeePerPassing(DateTime date, List<TollFeeModel> tollFees)
+    internal int GetTollFeePerPassing(DateTime date, List<TollFeeModel> tollFees)
     {
 
         var tollFee = tollFees.FirstOrDefault(x =>
@@ -134,28 +145,20 @@ public class TollFeeService : ITollFeeService
 
         if (tollFee == null)
         {
-            _logger.LogWarning("No fee found for {date}", date);
+            _logger.LogCritical("No fee found for {date}", date);
             return 0;
         }
 
         return tollFee.Fee;
     }
-
-    private async Task<List<TollFeeModel>> GetTollFees()
-    {
-        return await _tollFeeRepository.GetTollFees();
-    }
     
-     private async Task<bool> IsTollFreeVehicle(string vehicleType)
+    internal bool IsTollFreeVehicle(string vehicleType, Dictionary<String, TollFreeVehicleModel> tollFreeVehicles)
     {
-        var tollFreeVehicles = await _tollFeeRepository.GetTollFreeVehicleTypes();
         return tollFreeVehicles.ContainsKey(vehicleType) && tollFreeVehicles[vehicleType].Active;
     }
 
-    private async Task<List<DateTime>> RemoveFreeDates(List<DateTime> dates)
+    internal List<DateTime> RemoveFreeDates(List<DateTime> dates, List<TollFreeDateModel> tollFreeDates)
     {
-        var tollFreeDates = await _tollFeeRepository.GetTollFreeDates();
-        
         //Remove all dates that are toll free
         var tollFreeDatesToRemove = tollFreeDates
             .SelectMany(tollFreeDate => dates
@@ -165,7 +168,8 @@ public class TollFeeService : ITollFeeService
         return dates.Where(x => !tollFreeDatesToRemove.Contains(x)).ToList();
     }
     
-    private static bool IsDateBetweenWithMinutePrecision(DateTime date, DateTime startDate, DateTime stopDate)
+    //These probably belong to some sort of Date helper class, but for simplicity they're included here
+    internal static bool IsDateBetweenWithMinutePrecision(DateTime date, DateTime startDate, DateTime stopDate)
     {
         var minutePrecisionDate = GetDateWithMinutePrecision(date);
         var minutePrecisionStartDate = GetDateWithMinutePrecision(startDate);
@@ -174,12 +178,12 @@ public class TollFeeService : ITollFeeService
         return minutePrecisionDate >= minutePrecisionStartDate && minutePrecisionDate <= minutePrecisionStopDate;
     }
     
-    private static DateTime GetDateWithMinutePrecision(DateTime date)
+    internal static DateTime GetDateWithMinutePrecision(DateTime date)
     {
         return new DateTime(date.Year, date.Month, date.Day, date.Hour, date.Minute, 0);
     }
 
-    private static DateTime GetDateWithHourAndMinutePrecision(DateTime date)
+    internal static DateTime GetDateWithHourAndMinutePrecision(DateTime date)
     {
         return new DateTime(1, 1, 1, date.Hour, date.Minute, 0);
     }
