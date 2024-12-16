@@ -1,4 +1,4 @@
-# Norion Bank biltull Programmeringstest
+# Norion Bank Biltull Programmeringstest
 
 Programmet är ett minimal API skrivet i .NET 8 som beräknar biltullar.
 Idén var att bygga ett program runt de kodfiler jag fick för att kunna testa programmet, köra tester m.m. och ett API passar det endamålet väldigt bra, speciellt med möjligheten att byta inskickade json-objekt enkelt.
