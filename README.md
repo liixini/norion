@@ -1,7 +1,7 @@
 # Norion Bank Biltull Programmeringstest
 
 Programmet är ett minimal API skrivet i .NET 8 som beräknar biltullar.
-Idén var att bygga ett program runt de kodfiler jag fick för att kunna testa programmet, köra tester m.m. och ett API passar det endamålet väldigt bra, speciellt med möjligheten att byta inskickade json-objekt enkelt.
+Idén var att bygga ett program runt de kodfiler jag fick för att kunna testa programmet, köra tester m.m. och ett API passar det endamålet väldigt bra, speciellt med möjligheten att byta inskickade JSON-objekt enkelt.
 
 All data som tidigare var hårdkodad är utbruten till databas (MSSQL) där programmet läser upp datan via repos, med undantag för högsta dagsbeloppet samt hur länge man kan åka på samma avgift som läses från konfigurationen - ingen egentlig orsak för det förutom att konfigurationen inte användes för någonting.
 
