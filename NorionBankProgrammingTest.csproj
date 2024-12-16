@@ -16,6 +16,10 @@
     </ItemGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="NorionBankProgrammingTest.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
       <Compile Remove="NorionBankProgrammingTest.Tests\**" />
     </ItemGroup>
 
